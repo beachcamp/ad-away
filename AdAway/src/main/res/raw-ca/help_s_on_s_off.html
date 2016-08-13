@@ -8,7 +8,9 @@
 <p>S-OFF significa que la porció de la memòria NAND del vostre dispositu està desbloquejada i llesta per l'escriptura. L'ajustament per defecte d'HTC és S-ON que significa que no es pot accedir a algunes àrees del sistema i no es pot garantitzar un root permanent. A més a més, es comproven les signatures dels fitxers de firmware.</p>
 
 <h2>Tinc S-ON o S-OFF?</h2>
-<p>Aneu al menú d'arrancada del vostre dispositiu prement el botó <i>volum -</i> mentre premeu el botó d'arrancada i veureu un missatge que és S-OFF o S-ON. Un root complet és S-OFF.⏎ <br/><br/> Per a més informació aneu a <a href="http://www.addictivetips.com/mobile/what-is-s-off-how-to-gain-it-on-htc-android-phones-with-unrevoked-forever/">www.addictivetips.com</a> (en anglès).</p>
+<p>Accediu al menú d'arrencada del vostre dispositiu mantenint premuda la tecla <i>volum avall</i> mentre premeu el botó d'engegada i si us mostrarà el text S-OFF o S-ON. Si disposeu de permisos Root si us mostrarà normalment S-OFF.
+
+<br/><br/>Trobareu més informació (en anglès) a <a href="http://www.addictivetips.com/mobile/what-is-s-off-how-to-gain-it-on-htc-android-phones-with-unrevoked-forever/">www.addictivetips.com</a>. Altres mètodes S-OFF que (trobareu a l'enllaç anterior i) us poden interessar són: Revolutionary, Revone, Firewater, RumRunner, Moonshine, SunShine...</p>
 
 <h2>Solució</h2>
 <p>Pre-requisit: Heu d'instal·lar un SDK d'Android amb una shell ADB en el vostre ordinador personal.⏎
@@ -20,7 +22,7 @@
 <li>Seleccioneu <i>mount /system</i>, <i>mount /sdcard</i> i <i>mount /data</i>.</li>
 <li>Connecteu el dispositiu al vostre ordinador i obriu una terminal.</li>
 <li>Entreu a l'intèrpret d'ordres adb i introduïu <tt>ln -s /data/hosts /system/etc/hosts</tt> (això crea un enllaç simbòlic que permet que l'AdAway editi el fitxer d'amfitrions de <tt>/data</tt> tot i permetent de el sistema operatiu utilitzi el fitxer com si estigués a <tt>/system</tt>.)</li>
-<li>Reinicieu el dispositiu i establiu el <i>Fitxer d'amfitrions objectiu</i> a <i>/data/hosts</i> a les preferències de l'AdAway.</li>
+<li>Reinicieu el dispositiu i establiu el <i>Fitxer hosts objectiu</i> a <i>/data/hosts</i> a les preferències de l'AdAway.</li>
 <li>AdAway hauria de funcinar ara.</li>
 </ol>
 </body>

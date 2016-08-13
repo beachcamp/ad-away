@@ -22,6 +22,7 @@ package org.adaway.service;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedReader;
+import java.io.BufferedOutputStream;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
@@ -32,6 +33,8 @@ import java.net.URL;
 import java.net.URLConnection;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Date;
+import java.text.SimpleDateFormat;
 
 import org.adaway.R;
 import org.adaway.helper.PreferenceHelper;
@@ -52,7 +55,7 @@ import org.sufficientlysecure.rootcommands.Shell;
 
 import com.commonsware.cwac.wakeful.WakefulIntentService;
 
-import android.app.Notification;
+import android.support.v4.app.NotificationCompat;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.Context;
@@ -61,7 +64,6 @@ import android.database.Cursor;
 
 public class ApplyService extends WakefulIntentService {
     private Context mService;
-    private Notification mApplyNotification;
     private NotificationManager mNotificationManager;
 
     private int mNumberOfFailedDownloads;
@@ -176,6 +178,8 @@ public class ApplyService extends WakefulIntentService {
                             /* build connection */
                             URL mURL = new URL(currentUrl);
                             URLConnection connection = mURL.openConnection();
+                            connection.setConnectTimeout(15000);
+                            connection.setReadTimeout(30000);
 
                             /* connect */
                             connection.connect();
@@ -277,6 +281,7 @@ public class ApplyService extends WakefulIntentService {
                 mService.getString(R.string.apply_dialog_hostnames));
 
         int returnCode = StatusCodes.SUCCESS; // default return code
+        BufferedOutputStream bos = null;
 
         try {
             /* PARSE: parse hosts files to sets of hostnames and comments */
@@ -317,19 +322,26 @@ public class ApplyService extends WakefulIntentService {
             FileOutputStream fos = mService.openFileOutput(Constants.HOSTS_FILENAME,
                     Context.MODE_PRIVATE);
 
+            bos = new BufferedOutputStream(fos);
+
+            // build current timestamp for header
+            SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+            Date now = new Date();
+
             // add adaway header
-            String header = Constants.HEADER1 + Constants.LINE_SEPERATOR + Constants.HEADER2
-                    + Constants.LINE_SEPERATOR + Constants.HEADER_SOURCES;
-            fos.write(header.getBytes());
+            String header = Constants.HEADER1 + Constants.LINE_SEPERATOR + "# " +
+                    formatter.format(now) + Constants.LINE_SEPERATOR + Constants.HEADER2 +
+                    Constants.LINE_SEPERATOR + Constants.HEADER_SOURCES;
+            bos.write(header.getBytes());
 
             // write sources into header
             String source = null;
             for (String host : enabledHostsSources) {
                 source = Constants.LINE_SEPERATOR + "# " + host;
-                fos.write(source.getBytes());
+                bos.write(source.getBytes());
             }
 
-            fos.write(Constants.LINE_SEPERATOR.getBytes());
+            bos.write(Constants.LINE_SEPERATOR.getBytes());
 
             String redirectionIP = PreferenceHelper.getRedirectionIP(mService);
 
@@ -337,15 +349,25 @@ public class ApplyService extends WakefulIntentService {
             String localhost = Constants.LINE_SEPERATOR + Constants.LOCALHOST_IPv4 + " "
                     + Constants.LOCALHOST_HOSTNAME + Constants.LINE_SEPERATOR
                     + Constants.LOCALHOST_IPv6 + " " + Constants.LOCALHOST_HOSTNAME;
-            fos.write(localhost.getBytes());
+            bos.write(localhost.getBytes());
 
-            fos.write(Constants.LINE_SEPERATOR.getBytes());
+            bos.write(Constants.LINE_SEPERATOR.getBytes());
 
             // write hostnames
             String line;
-            for (String hostname : parser.getBlacklist()) {
-                line = Constants.LINE_SEPERATOR + redirectionIP + " " + hostname;
-                fos.write(line.getBytes());
+            String linev6;
+            if (PreferenceHelper.getEnableIpv6(mService)) {
+                for (String hostname : parser.getBlacklist()) {
+                    line = Constants.LINE_SEPERATOR + redirectionIP + " " + hostname;
+                    linev6 = Constants.LINE_SEPERATOR + "::1" + " " + hostname;
+                    bos.write(line.getBytes());
+                    bos.write(linev6.getBytes());
+                }
+            } else {
+                for (String hostname : parser.getBlacklist()) {
+                    line = Constants.LINE_SEPERATOR + redirectionIP + " " + hostname;
+                    bos.write(line.getBytes());
+                }
             }
 
             /* REDIRECTION LIST: write redirection items */
@@ -356,14 +378,12 @@ public class ApplyService extends WakefulIntentService {
                 redirectionItemIP = item.getValue();
 
                 line = Constants.LINE_SEPERATOR + redirectionItemIP + " " + redirectionItemHostname;
-                fos.write(line.getBytes());
+                bos.write(line.getBytes());
             }
 
             // hosts file has to end with new line, when not done last entry won't be
             // recognized
-            fos.write(Constants.LINE_SEPERATOR.getBytes());
-
-            fos.close();
+            bos.write(Constants.LINE_SEPERATOR.getBytes());
 
         } catch (FileNotFoundException e) {
             Log.e(Constants.TAG, "file to read or file to write could not be found", e);
@@ -373,6 +393,17 @@ public class ApplyService extends WakefulIntentService {
             Log.e(Constants.TAG, "files can not be written or read", e);
 
             returnCode = StatusCodes.PRIVATE_FILE_FAIL;
+        }
+        finally {
+            try {
+                if (bos != null) {
+                    bos.flush();
+                    bos.close();
+                }
+            }
+            catch (Exception e) {
+                Log.e(Constants.TAG, "Error closing output streams", e);
+            }
         }
 
         // delete downloaded hosts file from private storage
@@ -504,21 +535,20 @@ public class ApplyService extends WakefulIntentService {
 
         // add app name to notificationText
         tickerText = mService.getString(R.string.app_name) + ": " + tickerText;
-
-        // configure the notification
-        mApplyNotification = new Notification(R.drawable.status_bar_icon, tickerText,
-                System.currentTimeMillis());
-        mApplyNotification.flags = Notification.FLAG_ONGOING_EVENT
-                | Notification.FLAG_ONLY_ALERT_ONCE;
+        int icon = R.drawable.status_bar_icon;
+        long when = System.currentTimeMillis();
 
         // add app name to title
         String contentTitleWithAppName = mService.getString(R.string.app_name) + ": "
                 + contentTitle;
 
-        mApplyNotification.setLatestEventInfo(context, contentTitleWithAppName, contentText,
-                contentIntent);
+        NotificationCompat.Builder mBuilder = new NotificationCompat.Builder(context)
+                .setSmallIcon(icon).setContentTitle(contentTitleWithAppName).setTicker(tickerText)
+                .setWhen(when).setOngoing(true).setOnlyAlertOnce(true).setContentText(contentText);
 
-        mNotificationManager.notify(APPLY_NOTIFICATION_ID, mApplyNotification);
+        mNotificationManager.notify(APPLY_NOTIFICATION_ID, mBuilder.build());
+
+        mBuilder.setContentIntent(contentIntent);
 
         // update status in BaseActivity with Broadcast
         BaseActivity.setStatusBroadcast(mService, contentTitle, contentText, StatusCodes.CHECKING);
@@ -530,14 +560,19 @@ public class ApplyService extends WakefulIntentService {
         PendingIntent contentIntent = PendingIntent.getActivity(mService.getApplicationContext(),
                 0, intent, PendingIntent.FLAG_CANCEL_CURRENT);
 
+        int icon = R.drawable.status_bar_icon;
+
         // add app name to title
         String contentTitleWithAppName = mService.getString(R.string.app_name) + ": "
                 + contentTitle;
 
-        mApplyNotification.setLatestEventInfo(context, contentTitleWithAppName, contentText,
-                contentIntent);
+        NotificationCompat.Builder mBuilder = new NotificationCompat.Builder(context)
+                .setSmallIcon(icon).setContentTitle(contentTitleWithAppName)
+                .setContentText(contentText);
 
-        mNotificationManager.notify(APPLY_NOTIFICATION_ID, mApplyNotification);
+        mNotificationManager.notify(APPLY_NOTIFICATION_ID, mBuilder.build());
+
+        mBuilder.setContentIntent(contentIntent);
 
         // update status in BaseActivity with Broadcast
         BaseActivity.setStatusBroadcast(mService, contentTitle, contentText, StatusCodes.CHECKING);

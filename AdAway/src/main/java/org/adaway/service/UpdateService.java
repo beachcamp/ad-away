@@ -36,7 +36,7 @@ import org.adaway.util.StatusCodes;
 import org.adaway.util.DateUtils;
 import org.adaway.util.Utils;
 
-import android.app.Notification;
+import android.support.v4.app.NotificationCompat;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.Context;
@@ -165,6 +165,8 @@ public class UpdateService extends WakefulIntentService {
                         /* build connection */
                         URL mURL = new URL(currentUrl);
                         URLConnection connection = mURL.openConnection();
+                        connection.setConnectTimeout(15000);
+                        connection.setReadTimeout(30000);
 
                         currentLastModifiedOnline = connection.getLastModified();
 
@@ -256,19 +258,21 @@ public class UpdateService extends WakefulIntentService {
                 + getString(R.string.status_checking);
         long when = System.currentTimeMillis();
 
-        Notification notification = new Notification(icon, tickerText, when);
-        notification.flags = Notification.FLAG_ONGOING_EVENT;
-
         Context context = getApplicationContext();
         CharSequence contentTitle = getString(R.string.app_name) + ": "
                 + getString(R.string.status_checking);
         CharSequence contentText = getString(R.string.status_checking_subtitle);
+
+        NotificationCompat.Builder mBuilder = new NotificationCompat.Builder(context)
+            .setSmallIcon(icon).setContentTitle(contentTitle).setTicker(tickerText)
+                .setWhen(when).setOngoing(true).setContentText(contentText);
+
         Intent notificationIntent = new Intent(this, BaseActivity.class);
         PendingIntent contentIntent = PendingIntent.getActivity(this, 0, notificationIntent, 0);
 
-        notification.setLatestEventInfo(context, contentTitle, contentText, contentIntent);
+        mBuilder.setContentIntent(contentIntent);
 
-        mNotificationManager.notify(UPDATE_NOTIFICATION_ID, notification);
+        mNotificationManager.notify(UPDATE_NOTIFICATION_ID, mBuilder.build());
     }
 
     /**
